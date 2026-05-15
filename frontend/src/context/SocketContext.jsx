@@ -8,7 +8,9 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = io('/', { transports: ['websocket', 'polling'] });
+    // In dev, connect to '/' (proxied by Vite). In production, connect directly to the backend URL.
+    const serverUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
+    const socket = io(serverUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import api from './utils/api';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -67,6 +68,15 @@ function AuthLayout() {
 }
 
 export default function App() {
+  // Keep Render free-tier backend alive — ping every 14 min to prevent cold starts
+  useEffect(() => {
+    const INTERVAL_MS = 14 * 60 * 1000; // 14 minutes
+    const ping = () => api.get('/health').catch(() => {}); // silent — never throws
+    ping(); // immediate ping on mount
+    const id = setInterval(ping, INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
