@@ -49,6 +49,10 @@ app.set('io', io);
 // Connect to PostgreSQL and sync models
 // (called at the bottom inside the async startup IIFE)
 
+// CORS must be first — before helmet and rate limiter so OPTIONS preflight succeeds
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // explicit preflight for all routes
+
 // Security headers
 app.use(helmet());
 
@@ -62,8 +66,7 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// Middleware
-app.use(cors(corsOptions));
+// Body parser
 app.use(express.json({ limit: '10kb' }));
 
 // Routes
