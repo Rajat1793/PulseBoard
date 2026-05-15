@@ -8,8 +8,11 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    // In dev, connect to '/' (proxied by Vite). In production, connect directly to the backend URL.
-    const serverUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
+    // In dev, __VITE_API_URL__ is '' so socket.io uses the Vite proxy (connects to '/').
+    // In production, it's the backend Render URL baked in at build time.
+    const serverUrl = (typeof __VITE_API_URL__ !== 'undefined' && __VITE_API_URL__)
+      ? __VITE_API_URL__
+      : (import.meta.env.VITE_API_URL || undefined);
     const socket = io(serverUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
