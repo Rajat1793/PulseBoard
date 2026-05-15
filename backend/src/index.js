@@ -26,11 +26,16 @@ const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
   .map((o) => o.trim());
 
+console.log('[CORS] Allowed origins:', allowedOrigins);
+
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, health checks)
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    // Allow requests with no origin (curl, health checks, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Reject with false (sends no CORS header) — log so it shows in Render logs
+    console.warn('[CORS] Blocked origin:', origin);
+    callback(null, false);
   },
   credentials: true,
 };
