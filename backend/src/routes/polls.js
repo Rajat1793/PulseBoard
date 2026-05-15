@@ -7,7 +7,7 @@ const { protect } = require('../middleware/auth');
 
 // Helper: compute analytics for a poll
 const computeAnalytics = async (poll) => {
-  const responses = await Response.find({ poll: poll._id });
+  const responses = await Response.findAll({ where: { pollId: poll.id } });
 
   const questions = poll.questions.map((q) => {
     const optionCounts = {};
@@ -17,9 +17,7 @@ const computeAnalytics = async (poll) => {
 
     let responseCount = 0;
     responses.forEach((r) => {
-      const answer = r.answers.find(
-        (a) => a.questionId.toString() === q._id.toString()
-      );
+      const answer = r.answers.find((a) => a.questionId === q._id);
       if (answer && optionCounts[answer.selectedOption] !== undefined) {
         optionCounts[answer.selectedOption]++;
         responseCount++;
@@ -43,7 +41,7 @@ const computeAnalytics = async (poll) => {
     authenticatedResponses: responses.filter((r) => !r.isAnonymous).length,
     questions,
     poll: {
-      _id: poll._id,
+      _id: poll.id,
       title: poll.title,
       description: poll.description,
       expiresAt: poll.expiresAt,
@@ -60,9 +58,7 @@ const computeAnalytics = async (poll) => {
 // GET /api/polls/public/:shareId — get poll for public respondent
 router.get('/public/:shareId', async (req, res) => {
   try {
-    const poll = await Poll.findOne({ shareId: req.params.shareId }).select(
-      '-creator'
-    );
+    const poll = await Poll.findOne({ where: { shareId: req.params.shareId } });
     if (!poll) {
       return res.status(404).json({ success: false, message: 'Poll not found' });
     }
@@ -111,9 +107,14 @@ router.post(
     }
 
     try {
+      const { title, description, questions, requireAuth, expiresAt } = req.body;
       const poll = await Poll.create({
-        ...req.body,
-        creator: req.user._id,
+        title,
+        description,
+        questions,
+        requireAuth,
+        expiresAt,
+        creatorId: req.user.id,
       });
 
       res.status(201).json({ success: true, data: poll });
@@ -126,8 +127,9 @@ router.post(
 // GET /api/polls — list creator's polls
 router.get('/', protect, async (req, res) => {
   try {
-    const polls = await Poll.find({ creator: req.user._id }).sort({
-      createdAt: -1,
+    const polls = await Poll.findAll({
+      where: { creatorId: req.user.id },
+      order: [['createdAt', 'DESC']],
     });
     res.json({ success: true, data: polls });
   } catch (err) {
@@ -139,8 +141,7 @@ router.get('/', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   try {
     const poll = await Poll.findOne({
-      _id: req.params.id,
-      creator: req.user._id,
+      where: { id: req.params.id, creatorId: req.user.id },
     });
     if (!poll) {
       return res
@@ -176,8 +177,7 @@ router.put(
 
     try {
       const poll = await Poll.findOne({
-        _id: req.params.id,
-        creator: req.user._id,
+        where: { id: req.params.id, creatorId: req.user.id },
       });
       if (!poll) {
         return res
@@ -190,7 +190,7 @@ router.put(
       if (description !== undefined) poll.description = description;
       if (expiresAt !== undefined) poll.expiresAt = expiresAt;
       if (requireAuth !== undefined) poll.requireAuth = requireAuth;
-      if (questions !== undefined) poll.questions = questions;
+      if (questions !== undefined) poll.set('questions', questions);
 
       await poll.save();
       res.json({ success: true, data: poll });
@@ -203,17 +203,16 @@ router.put(
 // DELETE /api/polls/:id — delete poll (creator only)
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const poll = await Poll.findOneAndDelete({
-      _id: req.params.id,
-      creator: req.user._id,
+    const poll = await Poll.findOne({
+      where: { id: req.params.id, creatorId: req.user.id },
     });
     if (!poll) {
       return res
         .status(404)
         .json({ success: false, message: 'Poll not found' });
     }
-    // Also remove all responses for this poll
-    await Response.deleteMany({ poll: req.params.id });
+    await poll.destroy();
+    await Response.destroy({ where: { pollId: req.params.id } });
     res.json({ success: true, message: 'Poll deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -224,8 +223,7 @@ router.delete('/:id', protect, async (req, res) => {
 router.post('/:id/publish', protect, async (req, res) => {
   try {
     const poll = await Poll.findOne({
-      _id: req.params.id,
-      creator: req.user._id,
+      where: { id: req.params.id, creatorId: req.user.id },
     });
     if (!poll) {
       return res
@@ -237,7 +235,7 @@ router.post('/:id/publish', protect, async (req, res) => {
     await poll.save();
 
     const io = req.app.get('io');
-    io.to(`poll-${poll._id}`).emit('poll-published', { pollId: poll._id });
+    io.to(`poll-${poll.id}`).emit('poll-published', { pollId: poll.id });
 
     res.json({ success: true, message: 'Poll results published', data: poll });
   } catch (err) {
@@ -249,8 +247,7 @@ router.post('/:id/publish', protect, async (req, res) => {
 router.get('/:id/analytics', protect, async (req, res) => {
   try {
     const poll = await Poll.findOne({
-      _id: req.params.id,
-      creator: req.user._id,
+      where: { id: req.params.id, creatorId: req.user.id },
     });
     if (!poll) {
       return res

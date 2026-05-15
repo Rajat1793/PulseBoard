@@ -1,92 +1,96 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
 const crypto = require('crypto');
+const sequelize = require('../config/db');
 
-const questionSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: [true, 'Question text is required'],
-    trim: true,
-    maxlength: [500, 'Question text cannot exceed 500 characters'],
-  },
-  isRequired: {
-    type: Boolean,
-    default: true,
-  },
-  options: {
-    type: [String],
-    validate: {
-      validator: (arr) => arr.length >= 2,
-      message: 'Each question must have at least 2 options',
-    },
-  },
-});
+class Poll extends Model {
+  get status() {
+    if (this.isPublished) return 'published';
+    if (new Date() > this.expiresAt) return 'expired';
+    return 'active';
+  }
 
-const pollSchema = new mongoose.Schema(
+  toJSON() {
+    const values = { ...this.get() };
+    values._id = values.id;
+    values.status = this.status;
+    return values;
+  }
+}
+
+Poll.init(
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
     title: {
-      type: String,
-      required: [true, 'Poll title is required'],
-      trim: true,
-      maxlength: [200, 'Title cannot exceed 200 characters'],
+      type: DataTypes.STRING(200),
+      allowNull: false,
+      validate: { notEmpty: true },
     },
     description: {
-      type: String,
-      trim: true,
-      maxlength: [1000, 'Description cannot exceed 1000 characters'],
-      default: '',
+      type: DataTypes.TEXT,
+      defaultValue: '',
     },
-    creator: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
+    creatorId: {
+      type: DataTypes.UUID,
+      allowNull: false,
     },
     shareId: {
-      type: String,
+      type: DataTypes.STRING,
       unique: true,
     },
     questions: {
-      type: [questionSchema],
-      validate: {
-        validator: (arr) => arr.length >= 1,
-        message: 'Poll must have at least one question',
-      },
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
     },
     requireAuth: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     expiresAt: {
-      type: Date,
-      required: [true, 'Expiry date is required'],
+      type: DataTypes.DATE,
+      allowNull: false,
     },
     isPublished: {
-      type: Boolean,
-      default: false,
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     totalResponses: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
-  { timestamps: true }
+  {
+    sequelize,
+    modelName: 'Poll',
+    tableName: 'polls',
+  }
 );
 
-// Auto-generate shareId before saving
-pollSchema.pre('save', function (next) {
-  if (!this.shareId) {
-    this.shareId = crypto.randomBytes(6).toString('hex');
+// Assign shareId and _id to each question before create
+Poll.addHook('beforeCreate', (poll) => {
+  if (!poll.shareId) {
+    poll.shareId = crypto.randomBytes(6).toString('hex');
   }
-  next();
+  if (Array.isArray(poll.questions)) {
+    poll.questions = poll.questions.map((q) => ({
+      ...q,
+      _id: q._id || crypto.randomUUID(),
+    }));
+  }
 });
 
-// Virtual for computed status
-pollSchema.virtual('status').get(function () {
-  if (this.isPublished) return 'published';
-  if (new Date() > this.expiresAt) return 'expired';
-  return 'active';
+// Assign _id to any new questions on update
+Poll.addHook('beforeUpdate', (poll) => {
+  if (poll.changed('questions') && Array.isArray(poll.questions)) {
+    poll.questions = poll.questions.map((q) => ({
+      ...q,
+      _id: q._id || crypto.randomUUID(),
+    }));
+  }
 });
 
-pollSchema.set('toJSON', { virtuals: true });
-pollSchema.set('toObject', { virtuals: true });
-
-module.exports = mongoose.model('Poll', pollSchema);
+module.exports = Poll;

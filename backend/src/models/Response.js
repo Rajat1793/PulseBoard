@@ -1,45 +1,46 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
+const sequelize = require('../config/db');
 
-const answerSchema = new mongoose.Schema({
-  questionId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-  },
-  selectedOption: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-});
+class Response extends Model {}
 
-const responseSchema = new mongoose.Schema(
+Response.init(
   {
-    poll: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Poll',
-      required: true,
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    respondent: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
+    pollId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+    respondentId: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     isAnonymous: {
-      type: Boolean,
-      default: true,
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
-    answers: [answerSchema],
+    answers: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
   },
-  { timestamps: true }
-);
-
-// Prevent duplicate authenticated responses for the same poll
-responseSchema.index(
-  { poll: 1, respondent: 1 },
   {
-    unique: true,
-    partialFilterExpression: { respondent: { $ne: null } },
+    sequelize,
+    modelName: 'Response',
+    tableName: 'responses',
+    // PostgreSQL treats NULLs as distinct in unique indexes,
+    // so anonymous responses (respondentId = NULL) are always allowed.
+    indexes: [
+      {
+        unique: true,
+        fields: ['pollId', 'respondentId'],
+      },
+    ],
   }
 );
 
-module.exports = mongoose.model('Response', responseSchema);
+module.exports = Response;

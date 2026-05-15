@@ -1,81 +1,92 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcryptjs');
-
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, 'Name is required'],
-      trim: true,
-      maxlength: [50, 'Name cannot exceed 50 characters'],
-    },
-    email: {
-      type: String,
-      required: [true, 'Email is required'],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [
-        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,})+$/,
-        'Please provide a valid email',
-      ],
-    },
-    password: {
-      type: String,
-      required: [true, 'Password is required'],
-      minlength: [6, 'Password must be at least 6 characters'],
-      select: false,
-    },
-    // Account lockout — brute-force protection
-    loginAttempts: {
-      type: Number,
-      default: 0,
-      select: false,
-    },
-    lockUntil: {
-      type: Date,
-      select: false,
-    },
-  },
-  { timestamps: true }
-);
+const sequelize = require('../config/db');
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
-userSchema.virtual('isLocked').get(function () {
-  return this.lockUntil && this.lockUntil > Date.now();
-});
+class User extends Model {
+  get isLocked() {
+    return this.lockUntil && this.lockUntil > Date.now();
+  }
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
+  async comparePassword(candidatePassword) {
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
 
-// Compare password + manage lockout
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  const isMatch = await bcrypt.compare(candidatePassword, this.password);
-
-  if (isMatch) {
-    // Reset failed attempts on successful login
-    if (this.loginAttempts > 0 || this.lockUntil) {
-      await this.model('User').updateOne(
-        { _id: this._id },
-        { $set: { loginAttempts: 0 }, $unset: { lockUntil: 1 } }
-      );
+    if (isMatch) {
+      if (this.loginAttempts > 0 || this.lockUntil) {
+        await User.update(
+          { loginAttempts: 0, lockUntil: null },
+          { where: { id: this.id } }
+        );
+      }
+      return true;
     }
-    return true;
+
+    const newAttempts = (this.loginAttempts || 0) + 1;
+    const updates = { loginAttempts: newAttempts };
+    if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+      updates.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
+    }
+    await User.update(updates, { where: { id: this.id } });
+    return false;
   }
 
-  // Increment failed attempts
-  const updates = { $inc: { loginAttempts: 1 } };
-  if (this.loginAttempts + 1 >= MAX_LOGIN_ATTEMPTS) {
-    updates.$set = { lockUntil: new Date(Date.now() + LOCK_DURATION_MS) };
+  toJSON() {
+    const values = { ...this.get() };
+    values._id = values.id;
+    delete values.password;
+    delete values.loginAttempts;
+    delete values.lockUntil;
+    return values;
   }
-  await this.model('User').updateOne({ _id: this._id }, updates);
-  return false;
-};
+}
 
-module.exports = mongoose.model('User', userSchema);
+User.init(
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      validate: { notEmpty: true, len: [1, 50] },
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: { isEmail: true },
+      set(value) {
+        this.setDataValue('email', value.toLowerCase().trim());
+      },
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    loginAttempts: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    lockUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'User',
+    tableName: 'users',
+  }
+);
+
+User.addHook('beforeSave', async (user) => {
+  if (user.changed('password')) {
+    user.password = await bcrypt.hash(user.password, 12);
+  }
+});
+
+module.exports = User;

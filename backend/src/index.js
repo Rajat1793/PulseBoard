@@ -8,7 +8,10 @@ const rateLimit = require('express-rate-limit');
 
 dotenv.config();
 
-const connectDB = require('./config/db');
+const sequelize = require('./config/db');
+const User = require('./models/User');
+require('./models/Poll');
+require('./models/Response');
 const authRoutes = require('./routes/auth');
 const pollRoutes = require('./routes/polls');
 const responseRoutes = require('./routes/responses');
@@ -30,8 +33,8 @@ const io = new Server(server, {
 // Make io accessible in routes via req.app.get('io')
 app.set('io', io);
 
-// Connect to MongoDB
-connectDB();
+// Connect to PostgreSQL and sync models
+// (called at the bottom inside the async startup IIFE)
 
 // Security headers
 app.use(helmet());
@@ -71,7 +74,30 @@ app.use(errorHandler);
 // Initialize Socket.io
 initSocket(io);
 
+const seedDemoUser = async () => {
+  const existing = await User.findOne({ where: { email: 'demo@pulseboard.dev' } });
+  if (!existing) {
+    await User.create({
+      name: 'Demo User',
+      email: 'demo@pulseboard.dev',
+      password: 'demo123',
+    });
+    console.log('Demo user created: demo@pulseboard.dev / demo123');
+  }
+};
+
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`PulseBoard server running on port ${PORT}`);
-});
+
+(async () => {
+  try {
+    await sequelize.sync();
+    console.log('PostgreSQL connected and tables synced');
+    await seedDemoUser();
+    server.listen(PORT, () => {
+      console.log(`PulseBoard server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Database connection error:', error.message);
+    process.exit(1);
+  }
+})();

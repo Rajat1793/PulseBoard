@@ -40,7 +40,7 @@ router.post(
     const { name, email, password } = req.body;
 
     try {
-      const existing = await User.findOne({ email });
+      const existing = await User.findOne({ where: { email } });
       if (existing) {
         return res
           .status(400)
@@ -48,12 +48,12 @@ router.post(
       }
 
       const user = await User.create({ name, email, password });
-      const token = generateToken(user._id);
+      const token = generateToken(user.id);
 
       res.status(201).json({
         success: true,
         token,
-        user: { id: user._id, name: user.name, email: user.email },
+        user: { id: user.id, name: user.name, email: user.email },
       });
     } catch (err) {
       res.status(500).json({ success: false, message: 'Server error' });
@@ -78,7 +78,7 @@ router.post(
     const { email, password } = req.body;
 
     try {
-      const user = await User.findOne({ email }).select('+password +loginAttempts +lockUntil');
+      const user = await User.findOne({ where: { email } });
       if (!user) {
         return res
           .status(401)
@@ -101,12 +101,12 @@ router.post(
           .json({ success: false, message: 'Invalid email or password' });
       }
 
-      const token = generateToken(user._id);
+      const token = generateToken(user.id);
 
       res.json({
         success: true,
         token,
-        user: { id: user._id, name: user.name, email: user.email },
+        user: { id: user.id, name: user.name, email: user.email },
       });
     } catch (err) {
       res.status(500).json({ success: false, message: 'Server error' });
@@ -118,7 +118,7 @@ router.post(
 router.get('/me', protect, (req, res) => {
   res.json({
     success: true,
-    user: { id: req.user._id, name: req.user.name, email: req.user.email },
+    user: { id: req.user.id, name: req.user.name, email: req.user.email },
   });
 });
 

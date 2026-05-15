@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { UniqueConstraintError } = require('sequelize');
 const Poll = require('../models/Poll');
 const Response = require('../models/Response');
 const { optionalAuth } = require('../middleware/auth');
@@ -8,7 +9,7 @@ const { computeAnalytics } = require('./polls');
 // GET /api/responses/results/:shareId — public analytics (only if published)
 router.get('/results/:shareId', async (req, res) => {
   try {
-    const poll = await Poll.findOne({ shareId: req.params.shareId });
+    const poll = await Poll.findOne({ where: { shareId: req.params.shareId } });
     if (!poll) {
       return res.status(404).json({ success: false, message: 'Poll not found' });
     }
@@ -28,7 +29,7 @@ router.get('/results/:shareId', async (req, res) => {
 // POST /api/responses/:shareId — submit a response
 router.post('/:shareId', optionalAuth, async (req, res) => {
   try {
-    const poll = await Poll.findOne({ shareId: req.params.shareId });
+    const poll = await Poll.findOne({ where: { shareId: req.params.shareId } });
     if (!poll) {
       return res.status(404).json({ success: false, message: 'Poll not found' });
     }
@@ -58,8 +59,7 @@ router.post('/:shareId', optionalAuth, async (req, res) => {
     // Check for duplicate authenticated response
     if (req.user) {
       const existing = await Response.findOne({
-        poll: poll._id,
-        respondent: req.user._id,
+        where: { pollId: poll.id, respondentId: req.user.id },
       });
       if (existing) {
         return res
@@ -78,9 +78,7 @@ router.post('/:shareId', optionalAuth, async (req, res) => {
     // Validate mandatory questions
     const requiredQuestions = poll.questions.filter((q) => q.isRequired);
     for (const q of requiredQuestions) {
-      const answer = answers.find(
-        (a) => a.questionId && a.questionId.toString() === q._id.toString()
-      );
+      const answer = answers.find((a) => a.questionId === q._id);
       if (!answer || !answer.selectedOption) {
         return res.status(400).json({
           success: false,
@@ -91,9 +89,7 @@ router.post('/:shareId', optionalAuth, async (req, res) => {
 
     // Validate that selected options exist in the question
     for (const answer of answers) {
-      const question = poll.questions.find(
-        (q) => q._id.toString() === answer.questionId?.toString()
-      );
+      const question = poll.questions.find((q) => q._id === answer.questionId);
       if (!question) continue;
       if (answer.selectedOption && !question.options.includes(answer.selectedOption)) {
         return res.status(400).json({
@@ -106,21 +102,21 @@ router.post('/:shareId', optionalAuth, async (req, res) => {
     const isAnonymous = !req.user;
 
     const response = await Response.create({
-      poll: poll._id,
-      respondent: req.user ? req.user._id : null,
+      pollId: poll.id,
+      respondentId: req.user ? req.user.id : null,
       isAnonymous,
       answers,
     });
 
     // Increment total responses count
-    await Poll.findByIdAndUpdate(poll._id, { $inc: { totalResponses: 1 } });
+    await poll.increment('totalResponses');
 
     // Emit real-time analytics update to poll room
-    const updatedPoll = await Poll.findById(poll._id);
+    const updatedPoll = await Poll.findByPk(poll.id);
     const analytics = await computeAnalytics(updatedPoll);
     const io = req.app.get('io');
-    io.to(`poll-${poll._id}`).emit('analytics-update', analytics);
-    io.to(`poll-${poll._id}`).emit('new-response', {
+    io.to(`poll-${poll.id}`).emit('analytics-update', analytics);
+    io.to(`poll-${poll.id}`).emit('new-response', {
       totalResponses: analytics.totalResponses,
     });
 
@@ -130,7 +126,7 @@ router.post('/:shareId', optionalAuth, async (req, res) => {
       data: { id: response._id },
     });
   } catch (err) {
-    if (err.code === 11000) {
+    if (err instanceof UniqueConstraintError) {
       return res
         .status(400)
         .json({ success: false, message: 'You have already responded to this poll' });
