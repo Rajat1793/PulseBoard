@@ -6,26 +6,25 @@
 
 /* ── Design tokens — Papaya Orange ────────────────────────── */
 :root {
-  --clr-primary:              195 70 0;      /* #C34600 — deep papaya for text/icons on light */
-  --clr-primary-container:    255 107 43;    /* #FF6B2B — vivid papaya orange for buttons/fills */
-  --clr-surface:              255 253 249;   /* #FFFDF9 — warm white base */
-  --clr-surface-container:    245 237 228;   /* #F5EDE4 — warm peach elevated surface */
-  --clr-on-surface:           24 15 8;       /* #18150F — near-black warm */
-  --clr-on-surface-variant:   108 78 58;     /* #6C4E3A — warm mid-brown */
-  --clr-error:                178 38 38;     /* #B22626 */
-  --clr-panel:                255 255 252;   /* #FFFFFC — white for cards/inputs */
+  --clr-primary:              160 62 12;      /* #A03E0C — earthy papaya for text/icons */
+  --clr-primary-container:    192 80 30;      /* #C0501E — muted papaya for buttons/fills */
+  --clr-surface:              250 245 240;    /* #FAF5F0 — warm cream base */
+  --clr-surface-container:    238 230 220;    /* #EEE6DC — warm sand elevated surface */
+  --clr-on-surface:           28 18 10;       /* #1C120A — near-black warm */
+  --clr-on-surface-variant:   105 75 55;      /* #694B37 — warm mid-brown */
+  --clr-error:                162 36 36;      /* #A22424 */
+  --clr-panel:                255 251 246;    /* #FFFBF6 — warm white for cards/inputs */
 }
 
 .dark {
-  /* Papaya orange stays vivid in dark mode */
-  --clr-primary:              255 138 80;    /* #FF8A50 — bright papaya on dark backgrounds */
-  --clr-primary-container:    255 107 43;    /* #FF6B2B — same vivid papaya orange */
-  --clr-surface:              14 10 7;       /* #0E0A07 — near-black warm */
-  --clr-surface-container:    24 17 12;      /* #18110C — raised dark surface */
-  --clr-on-surface:           255 248 240;   /* #FFF8F0 — warm off-white */
-  --clr-on-surface-variant:   175 148 125;   /* #AF947D — muted warm text */
-  --clr-panel:                32 23 16;      /* #201710 — card/input backgrounds */
-  --clr-error:                220 80 80;     /* #DC5050 */
+  --clr-primary:              188 115 70;     /* #BC7346 — muted papaya on dark */
+  --clr-primary-container:    175 84 35;      /* #AF5423 — earthy papaya for buttons */
+  --clr-surface:              20 13 8;        /* #140D08 — dark warm brown */
+  --clr-surface-container:    30 20 13;       /* #1E140D — raised dark surface */
+  --clr-on-surface:           244 238 230;    /* #F4EEE6 — warm off-white */
+  --clr-on-surface-variant:   162 132 110;    /* #A2846E — muted warm text */
+  --clr-panel:                38 26 18;       /* #261A12 — card/input backgrounds */
+  --clr-error:                188 62 62;      /* #BC3E3E */
 }
 
 @layer base {
@@ -110,15 +109,15 @@
 .dark .\!bg-white {
   background-color: rgb(var(--clr-panel)) !important;
 }
-/* Papaya orange button — same vivid in dark */
+/* Papaya orange button — earthy, not neon */
 .dark .btn-primary {
-  background-color: rgb(255 107 43);
-  box-shadow: 0 4px 16px rgba(255,107,43,0.28);
+  background-color: rgb(175 84 35);
+  box-shadow: 0 4px 16px rgba(175,84,35,0.22);
 }
 .dark .btn-primary:hover {
-  background-color: rgb(255 122 58);
+  background-color: rgb(192 95 42);
 }
 /* Status badges in dark */
-.dark .badge-active  { background-color: rgb(255 107 43); color: white; border: none; }
-.dark .badge-expired { background-color: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.2); color: #fde68a; }
-.dark .badge-published { background-color: rgba(255,138,80,0.12); border-color: rgba(255,138,80,0.18); color: rgb(255 160 110); }
+.dark .badge-active  { background-color: rgb(175 84 35); color: white; border: none; }
+.dark .badge-expired { background-color: rgba(200,145,60,0.15); border-color: rgba(200,145,60,0.2); color: #e8c87a; }
+.dark .badge-published { background-color: rgba(188,115,70,0.12); border-color: rgba(188,115,70,0.18); color: rgb(195 138 100); }
