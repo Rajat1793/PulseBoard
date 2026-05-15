@@ -21,12 +21,25 @@ const { initSocket } = require('./socket');
 const app = express();
 const server = http.createServer(app);
 
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+// Support comma-separated origins e.g. "https://foo.onrender.com,http://localhost:5173"
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, health checks)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+};
 
 const io = new Server(server, {
   cors: {
-    origin: clientUrl,
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -50,7 +63,7 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // Middleware
-app.use(cors({ origin: clientUrl, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
 
 // Routes
